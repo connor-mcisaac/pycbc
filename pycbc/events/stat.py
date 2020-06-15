@@ -106,6 +106,25 @@ class NewSNRStatistic(Stat):
         """
         return (s0 ** 2. + s1 ** 2.) ** 0.5
 
+    def coinc_max(self, s0, s1, slide, step): # pylint:disable=unused-argument
+        """Calculate the maximum coincident detection statistic.
+
+        Parameters
+        ----------
+        s0: numpy.ndarray
+            Single detector ranking statistic for the first detector.
+        s1: numpy.ndarray
+            Single detector ranking statistic for the second detector.
+        slide: (unused in this statistic)
+        step: (unused in this statistic)
+
+        Returns
+        -------
+        numpy.ndarray
+            Array of maximum coincident ranking statistic values
+        """
+        return numpy.ones(s0.shape) * np.inf
+
     def coinc_multiifo(self, s, slide, step, to_shift,
                        **kwargs): # pylint:disable=unused-argument
         """Calculate the coincident detection statistic.
@@ -599,6 +618,7 @@ class PhaseTDStatistic(NewSNRStatistic):
         self.bins['dphi'] = histfile['pbins'][:]
         self.bins['snr'] = histfile['sbins'][:]
         self.bins['sigma_ratio'] = histfile['rbins'][:]
+        self.hist_max = self.hist.max()
 
     def single(self, trigs):
         """Calculate the single detector statistic & assemble other parameters
@@ -720,8 +740,8 @@ class PhaseTDStatistic(NewSNRStatistic):
 
         return self.signal_hist(td, pd, sn0, sn1, rd)
 
-    def coinc(self, s0, s1, slide, step):
-        """Calculate the coincident detection statistic.
+    def coinc_max(self, s0, s1, slide, step):
+        """Calculate the maximum coincident detection statistic.
 
         Parameters
         ----------
@@ -738,10 +758,12 @@ class PhaseTDStatistic(NewSNRStatistic):
         Returns
         -------
         coinc_stat: numpy.ndarray
-            An array of the coincident ranking statistic values
+            An array of the maximum coincident ranking statistic values
         """
+        if self.hist is None:
+            self.get_hist()
         rstat = s0['snglstat'] ** 2. + s1['snglstat'] ** 2.
-        cstat = rstat + 2. * self.logsignalrate(s0, s1, slide * step)
+        cstat = rstat + 2. * self.hist_max
         cstat[cstat < 0] = 0
         return cstat ** 0.5
 
@@ -941,6 +963,18 @@ class PhaseTDExpFitStatistic(PhaseTDStatistic, ExpFitCombinedSNR):
         # scale to resemble network SNR
         return cstat / (2.**0.5)
 
+    def coinc_max(self, s0, s1, slide, step):
+        if self.hist is None:
+            self.get_hist()
+        # logsignalrate function inherited from PhaseTDStatistic
+        logr_s = self.hist_max
+        # rescale by ExpFitCombinedSNR reference slope as for sngl stat
+        cstat = s0['snglstat'] + s1['snglstat'] + logr_s / self.alpharef
+        # cut off underflowing and very small values
+        cstat[cstat < 8.] = 8.
+        # scale to resemble network SNR
+        return cstat / (2.**0.5)
+
 
 class PhaseTDNewExpFitStatistic(PhaseTDNewStatistic, ExpFitCombinedSNR):
     """Statistic combining exponential noise model with signal histogram PDF"""
@@ -965,7 +999,7 @@ class PhaseTDNewExpFitStatistic(PhaseTDNewStatistic, ExpFitCombinedSNR):
 
     def coinc(self, s0, s1, slide, step):
         # logsignalrate function inherited from PhaseTDStatistic
-        logr_s = self.logsignalrate(s0, s1, slide * step)
+        logr_s = self.hist_max
         # rescale by ExpFitCombinedSNR reference slope as for sngl stat
         cstat = s0['snglstat'] + s1['snglstat'] + logr_s / self.alpharef
         # cut off underflowing and very small values
