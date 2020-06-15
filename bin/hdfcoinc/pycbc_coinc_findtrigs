@@ -224,6 +224,7 @@ if args.randomize_template_order:
 else:
     template_ids = range(tmin, tmax)
 
+
 for tnum in template_ids:
     tid0g = trigs0.set_template(tnum)
     tid1g = trigs1.set_template(tnum)
@@ -266,11 +267,6 @@ for tnum in template_ids:
 
             logging.info('Coincident Trigs: %s' % (len(i1)))
 
-
-            logging.info('Calculating Multi-Detector Combined Statistic: %s, %s', end0, end1)
-            c = rank_method.coinc(s0[i0], s1[i1], slide,
-                                  args.timeslide_interval)
-
             #index values of the zerolag triggers
             fi = numpy.where(slide == 0)[0]
 
@@ -279,12 +275,17 @@ for tnum in template_ids:
             logging.info('%s foreground triggers' % len(fi))
             logging.info('%s background triggers' % len(bi))
 
+            logging.info('Calculating Maximum Multi-Detector Combined Statistic for background: %s, %s', end0, end1)
+            c_max = rank_method.coinc_max(s0[i0][bi], s1[i1][bi], slide,
+                                          args.timeslide_interval)
+
             # coincs will be decimated by successive (multiplicative) levels
             # tracked by 'total_factor'
             bi_dec = bi.copy()
             dec = numpy.ones(len(bi))
 
             total_factor = 1
+            bc = None
             for decstr in args.loudest_keep_values:
                 thresh, factor = decstr.split(':')
                 thresh = float(thresh)
@@ -292,19 +293,38 @@ for tnum in template_ids:
                 # of an integer
                 total_factor *= int(factor)
 
-                # triggers not being further decimated
-                upper = c[bi_dec] >= thresh
-                idxk = bi_dec[upper]
+                if bc is None:
+                    # triggers that may have stats larger than thresh
+                    possible = c_max >= thresh
+                    idxk_p = bi_dec[possible]
 
-                # decimate the remaining triggers
-                idx = bi_dec[c[bi_dec] < thresh]
-                idx = idx[slide[idx] % total_factor == 0]
+                    # decimate the triggers that can't be greater than thresh
+                    idx_p = bi_dec[c_max < thresh]
+                    idx_p = idx_p[slide[idx_p] % total_factor == 0]
 
-                bi_dec = numpy.concatenate([idxk, idx])
-                dec = numpy.concatenate([dec[upper],
-                                         numpy.repeat(total_factor, len(idx))]
-                                       )
+                    bi_dec = numpy.concatenate([idxk_p, idx_p])
+                    dec = numpy.concatenate([dec[possible],
+                                             numpy.repeat(total_factor, len(idx_p))])
 
+                    bc = rank_method.coinc(s0[i0][bi_dec], s1[i1][bi_dec],
+                                           slide[bi_dec], args.timeslide_interval)
+
+                # triggers that are above thresh
+                idxk = numpy.where(bc >= thresh)[0]
+
+                # decimate triggers below thresh
+                idx = numpy.where(bc < thresh)[0]
+                idx = numpy.where(slide[bi_dec][idx] % total_factor == 0)[0]
+
+                cut = numpy.concatenate([idxk, idx])
+
+                bi_dec = bi_dec[cut]
+                bc = bc[cut]
+                dec = dec[cut]
+
+            fc = rank_method.coinc(s0[i0][fi], s1[i1][fi],
+                                   slide[fi], args.timeslide_interval)
+            c = numpy.concatenate([bc, fc])
             ti = numpy.concatenate([bi_dec, fi]).astype(numpy.uint32)
             dec_fac = numpy.concatenate([dec, numpy.ones(len(fi))])
             logging.info('%s after decimation' % len(ti))
@@ -315,7 +335,7 @@ for tnum in template_ids:
             del i0
             del i1
 
-            data['stat'] += [c[ti]]
+            data['stat'] += [c]
             data['decimation_factor'] += [dec_fac]
             data['time1'] += [t0[g0]]
             data['time2'] += [t1[g1]]
@@ -326,6 +346,7 @@ for tnum in template_ids:
 
             start1 += args.batch_singles
         start0 += args.batch_singles
+
 
 if len(data['stat']) > 0:
     for key in data:
