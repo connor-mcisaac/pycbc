@@ -4,7 +4,6 @@ from pycbc import events, detector
 from pycbc.events import veto, coinc, stat
 import pycbc.version
 from numpy.random import seed, shuffle
-import time
 
 parser = argparse.ArgumentParser()
 parser.add_argument("--verbose", action="count")
@@ -265,6 +264,9 @@ for tnum in template_ids:
 
             i0, i1, slide = coinc.time_coincidence(t0, t1, time_window,
                                                    args.timeslide_interval)
+            s0i0 = s0[i0]
+            s1i1 = s1[i1]
+
 
             logging.info('Coincident Trigs: %s' % (len(i1)))
 
@@ -277,7 +279,7 @@ for tnum in template_ids:
             logging.info('%s background triggers' % len(bi))
 
             logging.info('Calculating Maximum Multi-Detector Combined Statistic for background: %s, %s', end0, end1)
-            c_max = rank_method.coinc_max(s0[i0], s1[i1], slide,
+            c_max = rank_method.coinc_max(s0i0, s1i1, slide,
                                           args.timeslide_interval)
             # coincs will be decimated by successive (multiplicative) levels
             # tracked by 'total_factor'
@@ -293,6 +295,7 @@ for tnum in template_ids:
                 total_factor *= int(factor)
 
                 if bc is None:
+
                     # triggers that may have stats larger than thresh
                     possible = c_max[bi_dec] >= thresh
                     idxk_p = bi_dec[possible]
@@ -303,9 +306,9 @@ for tnum in template_ids:
                     
                     bi_dec = numpy.concatenate([idxk_p, idx_p])
                     dec = numpy.ones(len(bi_dec))
-                    
+
                     bc = numpy.zeros(len(i0), dtype=numpy.float64)
-                    bc[bi_dec] += rank_method.coinc(s0[i0][bi_dec], s1[i1][bi_dec],
+                    bc[bi_dec] += rank_method.coinc(s0i0[bi_dec], s1i1[bi_dec],
                                                     slide[bi_dec], args.timeslide_interval)
 
                 # triggers not being further decimated
@@ -322,11 +325,12 @@ for tnum in template_ids:
                                        )
 
             bc = bc[bi_dec]
-            fc = rank_method.coinc(s0[i0][fi], s1[i1][fi],
+            fc = rank_method.coinc(s0i0[fi], s1i1[fi],
                                    slide[fi], args.timeslide_interval)
             c = numpy.concatenate([bc, fc])
             ti = numpy.concatenate([bi_dec, fi]).astype(numpy.uint32)
             dec_fac = numpy.concatenate([dec, numpy.ones(len(fi))])
+
             logging.info('%s after decimation' % len(ti))
 
             # temporary storage for decimated trigger ids
@@ -346,6 +350,7 @@ for tnum in template_ids:
 
             start1 += args.batch_singles
         start0 += args.batch_singles
+
 
 if len(data['stat']) > 0:
     for key in data:
