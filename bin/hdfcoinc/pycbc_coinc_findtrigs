@@ -4,6 +4,7 @@ from pycbc import events, detector
 from pycbc.events import veto, coinc, stat
 import pycbc.version
 from numpy.random import seed, shuffle
+import time
 
 parser = argparse.ArgumentParser()
 parser.add_argument("--verbose", action="count")
@@ -276,13 +277,11 @@ for tnum in template_ids:
             logging.info('%s background triggers' % len(bi))
 
             logging.info('Calculating Maximum Multi-Detector Combined Statistic for background: %s, %s', end0, end1)
-            c_max = rank_method.coinc_max(s0[i0][bi], s1[i1][bi], slide,
+            c_max = rank_method.coinc_max(s0[i0], s1[i1], slide,
                                           args.timeslide_interval)
-
             # coincs will be decimated by successive (multiplicative) levels
             # tracked by 'total_factor'
             bi_dec = bi.copy()
-            dec = numpy.ones(len(bi))
 
             total_factor = 1
             bc = None
@@ -295,33 +294,34 @@ for tnum in template_ids:
 
                 if bc is None:
                     # triggers that may have stats larger than thresh
-                    possible = c_max >= thresh
+                    possible = c_max[bi_dec] >= thresh
                     idxk_p = bi_dec[possible]
 
                     # decimate the triggers that can't be greater than thresh
-                    idx_p = bi_dec[c_max < thresh]
+                    idx_p = bi_dec[numpy.invert(possible)]
                     idx_p = idx_p[slide[idx_p] % total_factor == 0]
-
+                    
                     bi_dec = numpy.concatenate([idxk_p, idx_p])
-                    dec = numpy.concatenate([dec[possible],
-                                             numpy.repeat(total_factor, len(idx_p))])
+                    dec = numpy.ones(len(bi_dec))
+                    
+                    bc = numpy.zeros(len(i0), dtype=numpy.float64)
+                    bc[bi_dec] += rank_method.coinc(s0[i0][bi_dec], s1[i1][bi_dec],
+                                                    slide[bi_dec], args.timeslide_interval)
 
-                    bc = rank_method.coinc(s0[i0][bi_dec], s1[i1][bi_dec],
-                                           slide[bi_dec], args.timeslide_interval)
+                # triggers not being further decimated
+                upper = bc[bi_dec] >= thresh
+                idxk = bi_dec[upper]
 
-                # triggers that are above thresh
-                idxk = numpy.where(bc >= thresh)[0]
+                # decimate the remaining triggers
+                idx = bi_dec[bc[bi_dec] < thresh]
+                idx = idx[slide[idx] % total_factor == 0]
 
-                # decimate triggers below thresh
-                idx = numpy.where(bc < thresh)[0]
-                idx = numpy.where(slide[bi_dec][idx] % total_factor == 0)[0]
+                bi_dec = numpy.concatenate([idxk, idx])
+                dec = numpy.concatenate([dec[upper],
+                                         numpy.repeat(total_factor, len(idx))]
+                                       )
 
-                cut = numpy.concatenate([idxk, idx])
-
-                bi_dec = bi_dec[cut]
-                bc = bc[cut]
-                dec = dec[cut]
-
+            bc = bc[bi_dec]
             fc = rank_method.coinc(s0[i0][fi], s1[i1][fi],
                                    slide[fi], args.timeslide_interval)
             c = numpy.concatenate([bc, fc])
@@ -346,7 +346,6 @@ for tnum in template_ids:
 
             start1 += args.batch_singles
         start0 += args.batch_singles
-
 
 if len(data['stat']) > 0:
     for key in data:
