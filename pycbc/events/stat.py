@@ -123,7 +123,7 @@ class NewSNRStatistic(Stat):
         numpy.ndarray
             Array of maximum coincident ranking statistic values
         """
-        return numpy.ones(s0.shape) * np.inf
+        return numpy.ones(s0.shape) * numpy.inf
 
     def coinc_multiifo(self, s, slide, step, to_shift,
                        **kwargs): # pylint:disable=unused-argument
