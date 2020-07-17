@@ -23,6 +23,7 @@ import pycbc
 import pycbc.version
 from pycbc import vetoes, psd, waveform, strain, scheme, fft, DYN_RANGE_FAC, events
 from pycbc.vetoes.sgchisq import SingleDetSGChisq
+from pycbc.vetoes.shift_chisq import SingleDetShiftChisq
 from pycbc.filter import MatchedFilterControl, make_frequency_series, qtransform
 from pycbc.types import TimeSeries, FrequencySeries, zeros, float32, complex64
 import pycbc.version
@@ -207,6 +208,7 @@ fft.insert_fft_option_group(parser)
 pycbc.opt.insert_optimization_option_group(parser)
 pycbc.inject.insert_injfilterrejector_option_group(parser)
 SingleDetSGChisq.insert_option_group(parser)
+SingleDetShiftChisq.insert_option_group(parser)
 opt = parser.parse_args()
 
 # Check that the values returned for the options make sense
@@ -263,6 +265,8 @@ with ctx:
         'chisq_dof'      : int,
         'bank_chisq'     : float32,
         'bank_chisq_dof' : int,
+        'shift_chisq'    : float32,
+        'shift_chisq_dof': int,
         'cont_chisq'     : float32,
         'psd_var_val'    : float32,
                 }
@@ -370,6 +374,7 @@ with ctx:
         opt.waveform_decompression_method if opt.use_compressed_waveforms else None)
 
     sg_chisq = SingleDetSGChisq.from_cli(opt, bank, opt.chisq_bins)
+    shift_chisq = SingleDetShiftChisq.from_cli(opt, flow)
 
     ntemplates = len(bank)
     nfilters = 0
@@ -443,6 +448,10 @@ with ctx:
                   autochisq.values(snr, idx+stilde.analyze.start, template,
                                    stilde.psd, norm, stilde=stilde,
                                    low_frequency_cutoff=flow)
+
+            out_vals['shift_chisq'], out_vals['shift_chisq_dof'] = \
+                  shift_chisq.values(template, stilde.psd, stilde, snrv, norm,
+                                     idx+stilde.analyze.start)
 
             idx += stilde.cumulative_index
 

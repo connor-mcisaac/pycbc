@@ -450,6 +450,8 @@ class EventManager(object):
             f['chisq'] = self.events['chisq']
             f['bank_chisq'] = self.events['bank_chisq']
             f['bank_chisq_dof'] = self.events['bank_chisq_dof']
+            f['shift_chisq'] = self.events['shift_chisq']
+            f['shift_chisq_dof'] = self.events['shift_chisq_dof']
             f['cont_chisq'] = self.events['cont_chisq']
             f['end_time'] = self.events['time_index'] / \
                               float(self.opt.sample_rate) \
@@ -713,6 +715,8 @@ class EventManagerCoherent(EventManagerMultiDetBase):
                 f['chisq'] = ifo_events['chisq']
                 f['bank_chisq'] = ifo_events['bank_chisq']
                 f['bank_chisq_dof'] = ifo_events['bank_chisq_dof']
+                f['shift_chisq'] = ifo_events['shift_chisq']
+                f['shift_chisq_dof'] = ifo_events['shift_chisq_dof']
                 f['cont_chisq'] = ifo_events['cont_chisq']
                 f['end_time'] = ifo_events['time_index'] / \
                         float(self.opt.sample_rate[ifo_str]) + \
@@ -988,6 +992,8 @@ class EventManagerMultiDet(EventManagerMultiDetBase):
                 f['chisq'] = ifo_events['chisq']
                 f['bank_chisq'] = ifo_events['bank_chisq']
                 f['bank_chisq_dof'] = ifo_events['bank_chisq_dof']
+                f['shift_chisq'] = ifo_events['shift_chisq']
+                f['shift_chisq_dof'] = ifo_events['shift_chisq_dof']
                 f['cont_chisq'] = ifo_events['cont_chisq']
                 f['end_time'] = ifo_events['time_index'] / \
                         float(self.opt.sample_rate[ifo_str]) + \
