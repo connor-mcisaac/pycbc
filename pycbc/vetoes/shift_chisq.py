@@ -1,8 +1,8 @@
 import numpy, logging
 from pycbc.waveform import FilterBank
 from pycbc.waveform.utils import apply_fseries_time_shift
-from pycbc.vetoes.bank_chisq import bank_chisq_from_filters
-from pycbc.filter import overlap_cplx, sigmasq, matched_filter_core
+from pycbc.filter import overlap_cplx, sigma, matched_filter_core
+from pycbc.types import real_same_precision_as, TimeSeries
 
 
 def apply_shift(template, dt, df):
@@ -14,38 +14,6 @@ def apply_shift(template, dt, df):
     template.roll(shift)
     template = apply_fseries_time_shift(template, dt)
     return template
-
-
-def segment_snrs(filters, sigmasqs, stilde, psd, low_frequency_cutoff):
-    """ This functions calculates the snr of each shifted template against
-    the segment
-    Parameters
-    ----------
-    filters: list of FrequencySeries
-        The list of bank veto templates filters.
-    stilde: FrequencySeries
-        The current segment of data.
-    psd: FrequencySeries
-    low_frequency_cutoff: float
-    Returns
-    -------
-    snr (list): List of snr time series.
-    norm (list): List of normalizations factors for the snr time series.
-    """
-    snrs = []
-    norms = []
-
-    for template, sigmasq in zip(filters, sigmasqs):
-        # For every template compute the snr against the stilde segment
-        snr, _, norm = matched_filter_core(
-                template, stilde, h_norm=sigmasq,
-                psd=None, low_frequency_cutoff=low_frequency_cutoff)
-        # SNR time series stored here
-        snrs.append(snr)
-        # Template normalization factor stored here
-        norms.append(norm)
-
-    return snrs, norms
 
 
 def template_overlaps(shifted, template, psd, low_frequency_cutoff):
@@ -62,31 +30,18 @@ def template_overlaps(shifted, template, psd, low_frequency_cutoff):
     overlaps: List of complex overlap values.
     """
     overlaps = []
-    sigmasqs = []
-    template_ow = template / psd
+    sigmas = []
     for shift in shifted:
-        overlap = overlap_cplx(template_ow, shift,
+        overlap = overlap_cplx(template, shift, psd=psd,
                                low_frequency_cutoff=low_frequency_cutoff,
                                normalized=False)
-        shift_sigmasq = sigmasq(shift, psd=psd,
-                                low_frequency_cutoff=low_frequency_cutoff)
+        shift_sigma = sigma(shift, psd=psd,
+                            low_frequency_cutoff=low_frequency_cutoff)
 
-        norm = numpy.sqrt(1. / template.sigmasq(psd) / shift_sigmasq)
+        norm = 1. / numpy.sqrt(template.sigmasq(psd)) / shift_sigma
         overlaps.append(overlap * norm)
-        sigmasqs.append(shift_sigmasq)
-        if (abs(overlaps[-1]) > 0.99):
-            errMsg = "Overlap > 0.99 between bank template and filter. "
-            errMsg += "This bank template will not be used to calculate "
-            errMsg += "bank chisq for this filter template. The expected "
-            errMsg += "value will be added to the chisq to account for "
-            errMsg += "the removal of this template.\n"
-            errMsg += "Masses of filter template: %e %e\n" \
-                      %(template.params.mass1, template.params.mass2)
-            errMsg += "Masses of bank filter template: %e %e\n" \
-                      %(bank_template.params.mass1, bank_template.params.mass2)
-            errMsg += "Overlap: %e" %(abs(overlaps[-1]))
-            logging.info(errMsg)
-    return overlaps, sigmasqs
+        sigmas.append(shift_sigma)
+    return overlaps, sigmas
 
 
 class SingleDetShiftChisq(object):
@@ -107,39 +62,54 @@ class SingleDetShiftChisq(object):
             self._overlaps_cache = {}
         else:
             self.do = False
-        
-    def cache_overlaps(self, template, psd):
+
+
+    def get_ortho(self, template, psd):
+        shifted = [apply_shift(template.copy(), s[0], s[1])
+                   for s in self.shift_tuples]
+
         key = (id(template.params), id(psd))
         if key not in self._overlaps_cache:
-            logging.info("...Calculate bank veto overlaps")
-            shifted = [apply_shift(template.copy(), s[0], s[1])
-                       for s in self.shift_tuples]
             o, s = template_overlaps(shifted, template, psd, self.f_low)
             self._overlaps_cache[key] = (o, s)
-        return self._overlaps_cache[key]
+        else:
+            o, s = self._overlaps_cache[key]
+
+        orthos = []
+        for j in range(len(shifted)):
+            norm = ((1 - o[j] * o[j].conj()).real) ** 0.5
+            ortho = (shifted[j] / s[j]
+                     - o[j] * template / numpy.sqrt(template.sigmasq(psd)))
+            ortho /= norm
+            orthos.append(ortho)
+
+        return orthos
+        
 
     def values(self, template, psd, stilde, snrv, norm, indices):
         if not self.do:
             return None, None
 
-        logging.info("...Doing bank veto")        
-        chisq = numpy.ones(len(snrv))
-        dof = numpy.ones(len(snrv))
+        logging.info("...Doing shift veto")
+        orthos = self.get_ortho(template, psd)
 
-        snr = numpy.abs(snrv * norm)
-        above = numpy.where(snr >= self.snr_threshold)[0]
+        chisq = numpy.zeros(len(snrv), dtype=real_same_precision_as(stilde))
+        dof = numpy.repeat(self.dof, len(snrv))
 
-        overlaps, sigmasqs = self.cache_overlaps(template, psd)
+        for j in range(len(orthos)):
+
+            ortho_snr, _, ortho_norm = matched_filter_core(orthos[j], stilde, psd=None,
+                                                           low_frequency_cutoff=self.f_low,
+                                                           h_norm=1.)
+            if indices is not None:
+                ortho_snr = ortho_snr.take(indices)
+
+            chisq += (ortho_snr * ortho_norm).squared_norm()
         
-        shifted = [apply_shift(template.copy(), s[0], s[1])
-                   for s in self.shift_tuples]
-        shift_veto_snrs, shift_veto_norms = segment_snrs(shifted, sigmasqs,
-                                                         stilde, psd, self.f_low)
-        
-        chisq[above] = bank_chisq_from_filters(snrv[above], norm, shift_veto_snrs,
-                                               shift_veto_norms, overlaps, indices[above])
-        dof[above] = numpy.repeat(self.dof, len(above))
-        
+        if indices is None:
+            chisq = TimeSeries(chisq, delta_t=snrv.delta_t,
+                               epoch=snrv.start_time, copy=False)
+
         return chisq, dof
 
     @staticmethod
