@@ -8,40 +8,61 @@ from pycbc.types import real_same_precision_as, TimeSeries
 def apply_shift(template, dt, df):
     shift = int(1.*df/template.delta_f)
     if df > 0:
-        template[-shift:] = 0
+        template[-shift:] = 0.
     elif df < 0:
-        template[:-shift] = 0
+        template[:-shift] = 0.
     template.roll(shift)
-    template = apply_fseries_time_shift(template, dt)
+    apply_fseries_time_shift(template, dt, copy=False)
     return template
 
 
-def template_overlaps(shifted, template, psd, low_frequency_cutoff):
-    """ This functions calculates the overlaps between the template and the
-    shifted templates.
-    Parameters
-    ----------
-    shifted: List of FrequencySeries
-    template: FrequencySeries
-    psd: FrequencySeries
-    low_frequency_cutoff: float
-    Returns
-    -------
-    overlaps: List of complex overlap values.
-    """
-    overlaps = []
-    sigmas = []
-    for shift in shifted:
-        overlap = overlap_cplx(template, shift, psd=psd,
-                               low_frequency_cutoff=low_frequency_cutoff,
-                               normalized=False)
-        shift_sigma = sigma(shift, psd=psd,
-                            low_frequency_cutoff=low_frequency_cutoff)
+def get_orthogonal(template, template_sigma, base, base_sigma, overlap):
+    norm = ((1. - overlap * overlap.conj()).real) ** 0.5
+    norm_temp = template / template_sigma
+    norm_base = base / base_sigma
+    ortho = (norm_temp - overlap * norm_base) / norm
+    return ortho
 
-        norm = 1. / numpy.sqrt(template.sigmasq(psd)) / shift_sigma
-        overlaps.append(overlap * norm)
-        sigmas.append(shift_sigma)
-    return overlaps, sigmas
+
+def get_chisq_from_orthogonal(ortho_templates, stilde, psd, f_low):
+
+    chisq = None
+    for temp in ortho_templates:
+
+        snr, _, norm = matched_filter_core(temp, stilde, psd=psd,
+                                           low_frequency_cutoff=f_low,
+                                           h_norm=1.)
+        if chisq is None:
+            chisq = (snr * norm).squared_norm()
+        else:
+            chisq += (snr * norm).squared_norm()
+
+    dof = len(ortho_templates) * 2
+
+    return chisq, dof
+
+
+def get_chisq_from_shifts(shift_tuples, template, stilde, psd, f_low):
+    
+    template_sigma = sigma(template, psd=psd, low_frequency_cutoff=f_low)
+    ortho_templates = []
+    for shift in shift_tuples:
+        shifted = apply_shift(template.copy(), shift[0], shift[1])
+        shifted_sigma = sigma(shifted, psd=psd, low_frequency_cutoff=f_low)
+
+        overlap = overlap_cplx(template, shifted, low_frequency_cutoff=f_low,
+                               normalized=False, psd=psd)
+        overlap *= 1. / template_sigma / shifted_sigma
+
+        ortho = get_orthogonal(shifted, shifted_sigma,
+                               template, template_sigma,
+                               overlap)
+
+        ortho_templates.append(ortho)
+
+    chisq, dof = get_chisq_from_orthogonal(ortho_templates, stilde, psd, f_low)
+
+    return chisq, dof
 
 
 class SingleDetShiftChisq(object):
@@ -70,21 +91,29 @@ class SingleDetShiftChisq(object):
 
         key = (id(template.params), id(psd))
         if key not in self._overlaps_cache:
-            o, s = template_overlaps(shifted, template, psd, self.f_low)
-            self._overlaps_cache[key] = (o, s)
+            overlaps = []
+            sigmas = []
+            for shift in shifted:
+                shift_sigma = sigma(shift, psd=psd, low_frequency_cutoff=self.f_low)
+                overlap = overlap_cplx(template, shift, psd=psd, low_frequency_cutoff=self.f_low,
+                                       normalized=False)
+                overlap = overlap / shift_sigma / numpy.sqrt(template.sigmasq(psd))
+
+                overlaps.append(overlap)
+                sigmas.append(shift_sigma)
+            self._overlaps_cache[key] = (overlaps, sigmas)
         else:
-            o, s = self._overlaps_cache[key]
+            overlaps, sigmas = self._overlaps_cache[key]
 
         orthos = []
         for j in range(len(shifted)):
-            norm = ((1 - o[j] * o[j].conj()).real) ** 0.5
-            ortho = (shifted[j] / s[j]
-                     - o[j] * template / numpy.sqrt(template.sigmasq(psd)))
-            ortho /= norm
+            ortho = get_orthogonal(shifted[j], sigmas[j],
+                                   template, numpy.sqrt(template.sigmasq(psd)),
+                                   overlaps[j])
             orthos.append(ortho)
 
         return orthos
-        
+
 
     def values(self, template, psd, stilde, snrv, norm, indices):
         if not self.do:
