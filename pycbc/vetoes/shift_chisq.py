@@ -67,7 +67,7 @@ def get_chisq_from_shifts(shift_tuples, template, stilde, psd, f_low):
 
 class SingleDetShiftChisq(object):
 
-    def __init__(self, shift_tuples, f_low, snr_threshold):
+    def __init__(self, shift_tuples, f_low):
         if shift_tuples:
             self.do = True
 
@@ -76,7 +76,6 @@ class SingleDetShiftChisq(object):
 
             self.shift_tuples = shift_tuples
             self.f_low = f_low
-            self.snr_threshold = snr_threshold
 
             self.dof = len(shift_tuples) * 2
 
@@ -144,8 +143,6 @@ class SingleDetShiftChisq(object):
     @staticmethod
     def insert_option_group(parser):
         group = parser.add_argument_group("Shift Chisq")
-        group.add_argument("--shift-chisq-snr-threshold", type=float,
-            help="Minimum SNR threshold to use shift chisq")
         group.add_argument("--shift-chisq-dt-df", type=str, nargs='+',
             help='Time and Frequency offsets of the sine-Gaussiansbank template'
                  + ' to use, format "xdt:df".')
@@ -156,4 +153,4 @@ class SingleDetShiftChisq(object):
         for shift_string in args.shift_chisq_dt_df:
             dt, df = shift_string[1:].split(':')
             shift_tuples.append((float(dt), float(df)))
-        return cls(shift_tuples, f_low, args.shift_chisq_snr_threshold)
+        return cls(shift_tuples, f_low)

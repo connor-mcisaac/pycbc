@@ -147,6 +147,26 @@ class NewSNRSGStatistic(NewSNRStatistic):
         return ranking.get_newsnr_sgveto(trigs)
 
 
+class NewSNRSGShiftStatistic(NewSNRSGStatistic):
+    """Calculate the NewSNRSGShift coincident detection statistic"""
+
+    def single(self, trigs):
+        """Calculate the single detector statistic, here equal to
+        newsnr_sgveto_shift
+
+        Parameters
+        ----------
+        trigs: dict of numpy.ndarrays, h5py group (or similar dict-like object)
+            Dictionary-like object holding single detector trigger information.
+
+        Returns
+        -------
+        numpy.ndarray
+            The array of single detector values
+        """
+        return ranking.get_newsnr_sgveto_shift(trigs)
+
+
 class NewSNRSGPSDStatistic(NewSNRSGStatistic):
     """Calculate the NewSNRSGPSD coincident detection statistic"""
 
@@ -164,6 +184,25 @@ class NewSNRSGPSDStatistic(NewSNRSGStatistic):
             The array of single detector values
         """
         return ranking.get_newsnr_sgveto_psdvar(trigs)
+
+
+class NewSNRSGShiftPSDStatistic(NewSNRSGShiftStatistic):
+    """Calculate the NewSNRSGShiftPSD coincident detection statistic"""
+
+    def single(self, trigs):
+        """Calculate the single detector statistic, here equal to newsnr
+        combined with sgveto, shift veto and psdvar statistic
+
+        Parameters
+        ----------
+        trigs: dict of numpy.ndarrays
+
+        Returns
+        -------
+        numpy.ndarray
+            The array of single detector values
+        """
+        return ranking.get_newsnr_sgveto_shift_psdvar(trigs)
 
 
 class NewSNRSGPSDScaledStatistic(NewSNRSGStatistic):
@@ -1010,6 +1049,19 @@ class PhaseTDExpFitSGPSDStatistic(PhaseTDExpFitSGStatistic):
         self.get_newsnr = ranking.get_newsnr_sgveto_psdvar
 
 
+class PhaseTDExpFitSGShiftPSDStatistic(PhaseTDExpFitSGStatistic):
+    """Statistic combining exponential noise model with signal histogram PDF
+
+    adding the sine-Gaussian veto, shift veto and PSD variation statistic to the
+    single detector ranking
+    """
+
+    def __init__(self, files=None, ifos=None, **kwargs):
+        PhaseTDExpFitSGStatistic.__init__(self, files=files, ifos=ifos,
+                                          **kwargs)
+        self.get_newsnr = ranking.get_newsnr_sgveto_shift_psdvar
+
+
 class PhaseTDExpFitSGPSDScaledStatistic(PhaseTDExpFitSGStatistic):
     """Statistic combining exponential noise model with signal histogram PDF
 
@@ -1319,6 +1371,13 @@ class ExpFitSGPSDFgBgNormStatistic(ExpFitSGFgBgNormNewStatistic):
         self.get_newsnr = ranking.get_newsnr_sgveto_psdvar
 
 
+class ExpFitSGShiftPSDFgBgNormStatistic(ExpFitSGFgBgNormNewStatistic):
+    def __init__(self, files=None, ifos=None, **kwargs):
+        ExpFitSGFgBgNormNewStatistic.__init__(self, files=files, ifos=ifos,
+                                              **kwargs)
+        self.get_newsnr = ranking.get_newsnr_sgveto_shift_psdvar
+
+
 class ExpFitSGPSDScaledFgBgNormStatistic(ExpFitSGFgBgNormNewStatistic):
     def __init__(self, files=None, ifos=None, **kwargs):
         ExpFitSGFgBgNormNewStatistic.__init__(self, files=files, ifos=ifos,
@@ -1374,8 +1433,11 @@ statistic_dict = {
     'phasetd_exp_fit_stat_sgveto': PhaseTDExpFitSGStatistic,
     'phasetd_new_exp_fit_stat_sgveto': PhaseTDNewExpFitSGStatistic,
     'newsnr_sgveto': NewSNRSGStatistic,
+    'newsnr_sgveto_shift': NewSNRSGShiftStatistic,
     'newsnr_sgveto_psdvar': NewSNRSGPSDStatistic,
+    'newsnr_sgveto_shift_psdvar': NewSNRSGShiftPSDStatistic,
     'phasetd_exp_fit_stat_sgveto_psdvar': PhaseTDExpFitSGPSDStatistic,
+    'phasetd_exp_fit_stat_sgveto_shift_psdvar': PhaseTDExpFitSGShiftPSDStatistic,
     'phasetd_exp_fit_stat_sgveto_psdvar_scaled':
         PhaseTDExpFitSGPSDScaledStatistic,
     'exp_fit_sg_bg_rate': ExpFitSGBgRateStatistic,
@@ -1384,6 +1446,7 @@ statistic_dict = {
     '2ogc': ExpFitSGPSDScaledFgBgNormStatistic, # backwards compatible
     '2ogcbbh': ExpFitSGPSDSTFgBgNormBBHStatistic, # backwards compatible
     'exp_fit_sg_fgbg_norm_psdvar': ExpFitSGPSDFgBgNormStatistic,
+    'exp_fit_sg_shift_fgbg_norm_psdvar': ExpFitSGShiftPSDFgBgNormStatistic,
     'exp_fit_sg_fgbg_norm_psdvar_bbh': ExpFitSGPSDFgBgNormBBHStatistic
 }
 
@@ -1396,7 +1459,9 @@ sngl_statistic_dict = {
     'exp_fit_sg_csnr': ExpFitSGCombinedSNR,
     'max_cont_trad_newsnr': MaxContTradNewSNRStatistic,
     'newsnr_sgveto': NewSNRSGStatistic,
+    'newsnr_sgveto_shift': NewSNRSGShiftStatistic,
     'newsnr_sgveto_psdvar': NewSNRSGPSDStatistic,
+    'newsnr_sgveto_shift_psdvar': NewSNRSGShiftPSDStatistic,
     'newsnr_sgveto_psdvar_scaled': NewSNRSGPSDScaledStatistic,
     'newsnr_sgveto_psdvar_scaled_threshold':
         NewSNRSGPSDScaledThresholdStatistic,
