@@ -499,8 +499,12 @@ class SingleDetTriggers(object):
             self.stat_name = "Reweighted SNR"
         elif ranking_statistic == "newsnr_sgveto":
             self.stat_name = "Reweighted SNR (+sgveto)"
+        elif ranking_statistic == "newsnr_sgveto_shift":
+            self.stat_name = "Reweighted SNR (+sgveto+shiftveto)"
         elif ranking_statistic == "newsnr_sgveto_psdvar":
             self.stat_name = "Reweighted SNR (+sgveto+psdvar)"
+        elif ranking_statistic == "newsnr_sgveto_shift_psdvar":
+            self.stat_name = "Reweighted SNR (+sgveto+shiftveto+psdvar)"
         elif ranking_statistic == "snr":
             self.stat_name = "SNR"
         else:
@@ -642,6 +646,10 @@ class SingleDetTriggers(object):
             / (self.get_column('chisq_dof') * 2 - 2)
 
     @property
+    def shift_chisq(self):
+        return self.get_column('shift_chisq') / self.get_column('shift_chisq_dof')
+
+    @property
     def psd_var_val(self):
         return self.get_column('psd_var_val')
 
@@ -654,9 +662,19 @@ class SingleDetTriggers(object):
         return ranking.newsnr_sgveto(self.snr, self.rchisq, self.sgchisq)
 
     @property
+    def newsnr_sgveto_shift(self):
+        return ranking.newsnr_sgveto_shift(self.snr, self.rchisq, self.sgchisq,
+                                           self.shift_chisq)
+
+    @property
     def newsnr_sgveto_psdvar(self):
         return ranking.newsnr_sgveto_psdvar(self.snr, self.rchisq,
                                            self.sgchisq, self.psd_var_val)
+    @property
+    def newsnr_sgveto_shift_psdvar(self):
+        return ranking.newsnr_sgveto_shift_psdvar(self.snr, self.rchisq,
+                                                  self.sgchisq, self.shift_chisq,
+                                                  self.psd_var_val)
 
     def get_column(self, cname):
         # Fiducial value that seems to work, not extensively tuned.
