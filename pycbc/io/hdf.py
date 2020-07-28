@@ -1087,7 +1087,8 @@ class ReadByTemplate(object):
 
 
 chisq_choices = ['traditional', 'cont', 'bank', 'max_cont_trad', 'sg',
-                 'max_bank_cont', 'max_bank_trad', 'max_bank_cont_trad']
+                 'max_bank_cont', 'max_bank_trad', 'max_bank_cont_trad',
+                 'shift']
 
 def get_chisq_from_file_choice(hdfile, chisq_choice):
     f = hdfile
@@ -1112,6 +1113,8 @@ def get_chisq_from_file_choice(hdfile, chisq_choice):
         chisq = f['sg_chisq'][:]
     elif chisq_choice == 'traditional':
         chisq = trad_chisq
+    elif chisq_choice == 'shift':
+        chisq = f['shift_chisq'][:] / f['shift_chisq_dof'][:]
     elif chisq_choice == 'cont':
         chisq = cont_chisq
     elif chisq_choice == 'bank':

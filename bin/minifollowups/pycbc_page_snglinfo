@@ -132,6 +132,11 @@ try:
 except:
     pass
 try:
+    data[0].append('%5.2f' % sngl_file.shift_chisq)
+    headers.append("shift&chi;<sup>2</sup>")
+except:
+    pass
+try:
     data[0].append('%5.2f' % sngl_file.psd_var_val)
     headers.append("PSD var")
 except:

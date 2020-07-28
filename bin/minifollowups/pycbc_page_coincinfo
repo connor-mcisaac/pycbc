@@ -204,6 +204,11 @@ for ifo in files.keys():
     except:
         pass
     try:
+        data[-1].append('%5.2f' % (d['shift_chisq'][i] / d['shift_chisq_dof'][i]))
+        headers.append("shift&nbsp;&chi;<sup>2</sup>")
+    except:
+        pass
+    try:
         data[-1].append('%5.2f' % d['psd_var_val'][i])
         headers.append("PSD var")
     except:
